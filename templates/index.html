@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en" data-theme="lofi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BennQA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/daisyui@4.12.13/dist/full.min.css"
+      rel="stylesheet"
+      type="text/css"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  </head>
+  <body class="min-h-screen bg-base-100 justify-center">
+    <div
+      class="container p-6 flex flex-col justify-self-center relative w-2/3 max-h-dvh"
+    >
+      <h2 class="text-center text-7xl text-mono font-black mb-4">BennQA</h2>
+
+      <div class="bg-base-100 p-6 overflow-auto w-full flex flex-col h-dvh">
+        <div id="chat-box" class="overflow-auto pr-4 max-h-full flex-1"></div>
+      </div>
+      <select
+        id="chatbot-select"
+        class="select select-ghost w-full select-xs max-w-xs mt-4"
+      >
+        <option disabled selected value="">
+          Pick the department you want to ask about
+        </option>
+        <option value="chatbot_1">Examination Department</option>
+        <option value="chatbot_2">Registrar</option>
+        <option value="chatbot_3">
+          Ordinances, Statutes and Act of Establishment
+        </option>
+      </select>
+      <div class="flex items-center pt-2">
+        <div class="flex items-center justify-center w-full space-x-2">
+          <input
+            id="user-input"
+            type="text"
+            placeholder="Ask your question..."
+            class="input input-bordered bg-base-100 w-full"
+            disabled
+          />
+          <button id="send-btn" class="btn btn-primary btn-disabled">
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+    <script>
+      $(document).ready(function () {
+        // Clear the chat box on page load
+        $("#chat-box").empty();
+
+        // Predefined message from the assistant
+        const now = new Date();
+        const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+        $("#chat-box").append(
+          `<div class='chat chat-start'>
+                    <div class='chat-header'> Assistant <time class='text-xs opacity-50'>${currentTime}</time></div>
+                    <div class='chat-bubble'>Hello! I'm here to assist you. How can I help you today?</div>
+                </div>`,
+        );
+
+        // Scroll to the bottom of the chat box
+        $("#chat-box").scrollTop($("#chat-box")[0].scrollHeight);
+
+        let currentChatbotId = ""; // Variable to track the current chatbot ID
+
+        // Enable input and send button based on chatbot selection
+        $("#chatbot-select").change(function () {
+          const selectedChatbot = $(this).val();
+
+          if (selectedChatbot) {
+            // If the selected chatbot is different from the current one, reset memory
+            if (currentChatbotId && currentChatbotId !== selectedChatbot) {
+              // Reset memory on the backend
+              $.ajax({
+                url: "/reset",
+                method: "POST",
+                success: function (data) {
+                  console.log(data.status); // Optional: Log the reset status
+                  // Clear the chat box and show a message
+                  // $("#chat-box").empty();
+                  $("#chat-box").append(
+                    `<div class="flex w-full flex-col">
+                    <div class="divider">${$("#chatbot-select option:selected").text()}</div>
+                    </div>`,
+                  );
+                  $("#chat-box").scrollTop($("#chat-box")[0].scrollHeight);
+                },
+                error: function () {
+                  console.error("Failed to reset memory.");
+                },
+              });
+            }
+            currentChatbotId = selectedChatbot; // Update the current chatbot ID
+            $("#user-input").prop("disabled", false); // Enable input
+            $("#send-btn").removeClass("btn-disabled"); // Enable send button
+          } else {
+            $("#user-input").prop("disabled", true); // Disable input
+            $("#send-btn").prop("disabled", true); // Disable send button
+          }
+        });
+
+        $("#send-btn").click(function () {
+          const now = new Date();
+          const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+          const userInput = $("#user-input").val().trim();
+          const chatbotId = $("#chatbot-select").val(); // Get the selected chatbot ID
+          if (userInput === "") return;
+
+          // Append user message
+          $("#chat-box").append(
+            `<div class='chat chat-end'>
+                        <div class='chat-header'> User <time class='text-xs opacity-50'>${currentTime}</time></div>
+                        <div class='chat-bubble'>${userInput}</div>
+                    </div>`,
+          );
+          $("#chat-box").scrollTop($("#chat-box")[0].scrollHeight);
+          $("#user-input").val("");
+
+          // Make the AJAX call to get the assistant's response
+          $.ajax({
+            url: "/ask",
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ query: userInput, chatbot_id: chatbotId }), // Send chatbot_id
+            success: function (data) {
+              const now = new Date();
+              const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+              // Append assistant's response
+              $("#chat-box").append(
+                `<div class='chat chat-start'>
+                                <div class='chat-header'> Assistant <time class='text-xs opacity-50'>${currentTime}</time></div>
+                                <div class='chat-bubble'>${data.response}</div>
+                            </div>`,
+              );
+              $("#chat-box").scrollTop($("#chat-box")[0].scrollHeight);
+            },
+            error: function (xhr) {
+              const now = new Date();
+              const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+              // Append error message
+              $("#chat-box").append(
+                `<div class='chat chat-start'>
+                                <div class='chat-header'> Assistant <time class='text-xs opacity-50'>${currentTime}</time></div>
+                                <div class='chat-bubble'>Sorry, there was a problem: ${xhr.status} ${xhr.statusText}</div>
+                            </div>`,
+              );
+            },
+          });
+        });
+
+        $("#user-input").keypress(function (e) {
+          if (e.which === 13) {
+            $("#send-btn").click();
+          }
+        });
+      });
+
+      $(document).ready(function () {
+        // Reset the backend memory
+        $.ajax({
+          url: "/reset",
+          method: "POST",
+          success: function (data) {
+            console.log(data.status); // Optional: Log the reset status
+          },
+          error: function () {
+            console.error("Failed to reset memory.");
+          },
+        });
+      });
+    </script>
+  </body>
+</html>
